@@ -587,17 +587,6 @@ KEY = lambda w, p: w.access(p) == 'k'
 LAND = lambda w, p: w.access(p) in [' ', 'o', 'k', 'a', 'O', '$', 'T', '-']
 WATER = lambda w, p: w.access(p) == '~'
 
-def find_route(zones, start, water, n_stones, n_trees, connected_by):
-    in_zone = lambda zone: (lambda p: get_root(p) == zone)
-
-    def state(cost_to, pos, n_stones, n_trees):
-        return ()
-
-    def heuristic():
-        return 0
-
-    states = PriorityQueue()
-
 def run_ai():
     moves = 0
 
