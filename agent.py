@@ -705,6 +705,10 @@ def run_ai():
                         else:
                             # Going by boat
                             path = world.find_nearest(GOTO(a[-1]), LAND, player.position, False)
+
+            # If I can't do ANYTHING else, try cutting a tree even though I already have wood
+            if not path and player.has('a'):
+                path = world.find_nearest(TREE, SAFETOWALK, player.position, False)
         else:
             # Try visiting everywhere in the water that you can
             paths = world.find_nearest_paths(NEEDSVISITING, WATER, player.position)
