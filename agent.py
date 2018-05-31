@@ -28,11 +28,69 @@ water = {}
 n_stones = {}
 n_trees = {}
 
-on_boat = False
+class Player:
+    def __init__(self, position, direction, inventory, on_boat, world):
+        self.position = position
+        self.direction = direction
+        self.inventory = inventory
+        self.world = world
+        self.on_boat = on_boat
 
-position = (WORLD_SIZE // 2, WORLD_SIZE // 2)
-direction = 0
-inventory = []
+    def has(self, thing):
+        return thing in self.inventory
+
+    def get_direction_to_moves(self, way):
+        if way == self.direction:
+            return ['f']
+        elif (way + 1) % 4 == self.direction:
+            return ['l', 'f']
+        elif (way + 3) % 4 == self.direction:
+            return ['r', 'f']
+        else:
+            return ['r', 'r', 'f']
+
+    def view_to_offset(self, x, y):
+        if self.direction == 0:
+            return (self.position[0] + x, self.position[1] + y)
+        elif self.direction == 1:
+            return (self.position[0] - y, self.position[1] + x)
+        elif self.direction == 2:
+            return (self.position[0] - x, self.position[1] - y)
+        else:
+            return (self.position[0] + y, self.position[1] - x)
+
+    def update_state(self, action):
+        if action in 'cC' and 'a' in self.inventory:
+            if 'w' not in self.inventory:
+                self.inventory.append('w')
+        elif action in 'fF':
+            self.position = self.view_to_offset(0, -1)
+            if self.on_boat:
+                if not WATER(self.position):
+                    self.on_boat = False
+            if self.world[self.position[1]][self.position[0]] in 'ako$':
+                self.inventory.append(self.world[self.position[1]][self.position[0]])
+
+                # INVESTIGATE
+                self.world[self.position[1]][self.position[0]]
+            if self.world[self.position[1]][self.position[0]] == '~':
+                if self.on_boat:
+                    pass
+                elif not 'o' in self.inventory:
+                    self.on_boat = True
+                    self.inventory.remove('w')
+                else:
+                    self.world[self.position[1]][self.position[0]] = 'O'
+                    self.inventory.remove('o')
+
+        elif action in 'lL':
+            self.direction = (self.direction + 3) % 4
+        elif action in 'rR':
+            self.direction = (self.direction + 1) % 4
+
+    def print_world(self):
+        print_world(self.position, self.direction)
+        print("holding [", ", ".join(self.inventory), "]")
 
 GOTO = lambda x: (lambda p: p == x)
 DISTTO = lambda x: (lambda p: abs(p[0] - x[0]) + abs(p[1] - x[1]))
@@ -225,47 +283,8 @@ def get_action(view):
         if final_string:
             return list(final_string)
 
-def update_state(action):
-    global position, direction, on_boat
-    if action in 'cC' and 'a' in inventory:
-        if 'w' not in inventory:
-            inventory.append('w')
-    elif action in 'fF':
-        position = view_to_offset(0, -1)
-        if on_boat:
-            if not WATER(position):
-                on_boat = False
-        if world[position[1]][position[0]] in 'ako$':
-            inventory.append(world[position[1]][position[0]])
-            world[position[1]][position[0]]
-        if world[position[1]][position[0]] == '~':
-            if on_boat:
-                pass
-            elif not 'o' in inventory:
-                on_boat = True
-                inventory.remove('w')
-            else:
-                world[position[1]][position[0]] = 'O'
-                inventory.remove('o')
-
-    elif action in 'lL':
-        direction = (direction + 3) % 4
-    elif action in 'rR':
-        direction = (direction + 1) % 4
-
-def view_to_offset(x, y):
-    global direction
-    if direction == 0:
-        return (position[0] + x, position[1] + y)
-    elif direction == 1:
-        return (position[0] - y, position[1] + x)
-    elif direction == 2:
-        return (position[0] - x, position[1] - y)
-    else:
-        return (position[0] + y, position[1] - x)
-
-def print_world():
-    global position, direction, XMIN, XMAX, YMIN, YMAX
+def print_world(position, direction):
+    global XMIN, XMAX, YMIN, YMAX
     # time.sleep(0.1)
     print(" ", end="")
     for c in range(XMIN, XMAX + 1):
@@ -279,7 +298,6 @@ def print_world():
             else:
                 print(world[r][c] if world[r][c] else '#', end="")
         print()
-    print("holding", ", ".join(inventory))
 
 # helper function to print the grid
 def print_grid(view):
@@ -289,8 +307,10 @@ def print_grid(view):
         print("|"+str(ln[0])+str(ln[1])+str(ln[2])+str(ln[3])+str(ln[4])+"|")
     print('+-----+')
 
-def read_in_world(sock):
-    global position, direction, XMIN, XMAX, YMIN, YMAX
+def read_in_world(sock, player):
+    global XMIN, XMAX, YMIN, YMAX
+    position = player.position
+    direction = player.direction
     i = 0
     j = 0
 
@@ -305,7 +325,7 @@ def read_in_world(sock):
         if not data:
             exit()
         for ch in data:
-            pos = view_to_offset(j - 2, i - 2)
+            pos = player.view_to_offset(j - 2, i - 2)
             if (i == 2 and j == 2):
                 view[i][j] = '^'
                 if not world[position[1]][position[0]]:
@@ -313,7 +333,7 @@ def read_in_world(sock):
                 elif world[position[1]][position[0]] in 'ako$':
                     world[position[1]][position[0]] = ' '
                 view[i][j + 1] = chr(ch)
-                pos = view_to_offset(j - 1, i - 2)
+                pos = player.view_to_offset(j - 1, i - 2)
                 if not world[pos[1]][pos[0]]:
                     world[pos[1]][pos[0]] = chr(ch)
                 j += 1
@@ -327,17 +347,7 @@ def read_in_world(sock):
         if i == 0 and j == 0:
             return
 
-def get_direction_to_moves(way):
-    if way == direction:
-        return ['f']
-    elif (way + 1) % 4 == direction:
-        return ['l', 'f']
-    elif (way + 3) % 4 == direction:
-        return ['r', 'f']
-    else:
-        return ['r', 'r', 'f']
-
-def get_next_to_direction(current, after):
+def get_direction_to(current, after):
     x, y = current
     if (x - 1, y) == after:
         return 3
@@ -353,8 +363,6 @@ def choose_move(move, sock):
 
     sock.send(move.encode('utf-8'))
     read_in_world(sock)
-
-moves = 0
 
 def get_root(A):
     if parent[A[1]][A[0]] == A:
@@ -615,7 +623,11 @@ def analyse_world(water, n_stones, n_trees, position):
     zones = water.keys()
 
 def run_ai():
-    global moves, position, direction, water, n_stones, on_boat
+    moves = 0
+
+    origin = (WORLD_SIZE//2, WORLD_SIZE//2)
+
+    player = Player(origin, 0, [], False, world)
 
     analysed = False
     needs_analysis = False
@@ -646,81 +658,80 @@ def run_ai():
     i = 0
     j = 0
 
-    read_in_world(sock)
+    read_in_world(sock, player)
     # print_grid(view) # COMMENT THIS OUT ON SUBMISSION
     while 1:
         path = []
 
         if needs_analysis:
-            analyse_world(water, n_stones, n_trees, position)
+            analyse_world(water, n_stones, n_trees, player.position)
             analysed = True
             needs_analysis = False
 
-        if not on_boat:
+        if not player.on_boat:
             # Take the gold home
-            if '$' in inventory:
-                path = find_nearest(GOTO((WORLD_SIZE//2, WORLD_SIZE//2)), SAFETOWALK, position)
+            if '$' in player.inventory:
+                path = find_nearest(GOTO((WORLD_SIZE//2, WORLD_SIZE//2)), SAFETOWALK, player.position)
             # Find the gold
             if not path:
-                path = find_nearest(GOLD, SAFETOGOLD, position)
+                path = find_nearest(GOLD, SAFETOGOLD, player.position)
             # Try cutting a tree
-            if not path and 'a' in inventory:
-                path = find_nearest(TREE, SAFETOWALK, position, False)
+            if not path and player.has('a'):
+                path = find_nearest(TREE, SAFETOWALK, player.position, False)
             # Try unlocking a door
-            if not path and 'k' in inventory:
-                path = find_nearest(DOOR, SAFETOWALK, position, False)
+            if not path and player.has('k'):
+                path = find_nearest(DOOR, SAFETOWALK, player.position, False)
             # Try picking up an axe
-            if not path and (not 'a' in inventory):
-                path = find_nearest(AXE, SAFETOWALK, position, True)
+            if not path and (not player.has('a')):
+                path = find_nearest(AXE, SAFETOWALK, player.position, True)
             # Try picking up a key
-            if not path and (not 'k' in inventory):
-                path = find_nearest(KEY, SAFETOWALK, position, True)
+            if not path and (not player.has('k')):
+                path = find_nearest(KEY, SAFETOWALK, player.position, True)
 
             # Try visiting somewhere that will show new info
             if not path:
                 # path = find_nearest(needs_visiting, SAFETOWALK, position)
-                paths = find_nearest_paths(needs_visiting, SAFETOWALK, position)
+                paths = find_nearest_paths(needs_visiting, SAFETOWALK, player.position)
                 if paths:
                     paths.sort(key=lambda x: -how_many_need_visit(x[0]))
                     path = paths[0]
 
             # At this point we need to ensure that the world has been analysed for next steps
             if not path:
-                analyse_world(water, n_stones, n_trees, position)
+                analyse_world(water, n_stones, n_trees, player.position)
                 analysed = True
 
             # Try determining what to do next in terms of actions over water
             if not path:
-                possibly_stone, a = get_water_actions(list(water.keys()), get_root(position), water, n_stones, n_trees, inventory, position)
+                possibly_stone, a = get_water_actions(list(water.keys()), get_root(player.position), water, n_stones, n_trees, player.inventory, player.position)
                 print(a)
                 if a:
                     if not possibly_stone:
-                        path = find_nearest(GOTO(a[-1]), SAFETOWALK, position, False)
-                    elif 'o' in inventory:
+                        path = find_nearest(GOTO(a[-1]), SAFETOWALK, player.position, False)
+                    elif player.has('o'):
                         # Place a stone
-                        path = find_nearest(GOTO(a[-1]), SAFETOSTONE, position, False)
+                        path = find_nearest(GOTO(a[-1]), SAFETOSTONE, player.position, False)
                     else:
                         # Try doing it with stones
-                        if n_stones[get_root(position)] + 1 >= len(a):
+                        if n_stones[get_root(player.position)] + 1 >= len(a):
                             # Get a stone
-                            path = find_nearest(STONE, SAFETOSTONE, position)
+                            path = find_nearest(STONE, SAFETOSTONE, player.position)
                         else:
                             # Going by boat
-                            path = find_nearest(GOTO(a[-1]), LAND, position, False)
+                            path = find_nearest(GOTO(a[-1]), LAND, player.position, False)
         else: # in_boat
-            paths = find_nearest_paths(needs_visiting, WATER, position)
+            paths = find_nearest_paths(needs_visiting, WATER, player.position)
             if paths:
                 paths.sort(key=lambda x: -how_many_need_visit(x[0]))
                 path = paths[0]
 
             if not path:
-                target_zone = choose_landing_zone(list(water.keys()), water, n_stones, n_trees, inventory, position)
-                path = find_nearest(lambda p: get_root(p) == target_zone, WATER, position, False)
+                target_zone = choose_landing_zone(list(water.keys()), water, n_stones, n_trees, player.inventory, player.position)
+                path = find_nearest(lambda p: get_root(p) == target_zone, WATER, player.position, False)
 
         if not path:
             print("Well this is it then. I have failed.")
             raise Error
-            # print_world()
 
         while path:
             # first = path[-1]
@@ -728,9 +739,9 @@ def run_ai():
 
             actions = []
 
-            way = get_next_to_direction(position, first)
+            way = get_direction_to(player.position, first)
 
-            actions = get_direction_to_moves(way)
+            actions = player.get_direction_to_moves(way)
 
             if TREE(first):
                 actions.remove('f')
@@ -746,13 +757,12 @@ def run_ai():
 
                 moves += 1
 
-                update_state(action)
+                player.update_state(action)
                 sock.send(action.encode('utf-8'))
-                read_in_world(sock)
+                read_in_world(sock, player)
                 # print_grid(view) # COMMENT THIS OUT ON SUBMISSION
-                print_world()
+                player.print_world()
                 print(moves)
-                print('on boat:', on_boat)
 
     sock.close()
 
