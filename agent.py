@@ -644,7 +644,11 @@ def run_ai():
         if not player.on_boat:
             # Take the gold home
             if '$' in player.inventory:
-                path = world.find_nearest(GOTO((WORLD_SIZE//2, WORLD_SIZE//2)), SAFETOWALK, player.position)
+                # # TODO: Make it so that you can chop trees on the way home
+                if player.has('a'):
+                    path = world.find_nearest(GOTO((WORLD_SIZE//2, WORLD_SIZE//2)), SAFETOTREE, player.position)
+                else:
+                    path = world.find_nearest(GOTO((WORLD_SIZE//2, WORLD_SIZE//2)), SAFETOWALK, player.position)
             # Find the gold
             if not path:
                 if player.has('a'):
