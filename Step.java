@@ -182,18 +182,12 @@ public class Step {
                game_lost = true;
              }
              break;
-          case ' ': case 'a': case 'k': case '$': case 'd':
+          case ' ': case 'a': case 'k': case '$': case 'd': case 'o': case 'O':
             if( on_raft && !off_map ) {
               map[row][col] = '~';
               on_raft = false;
               have_raft = false;
             }
-          case 'O':
-            if( on_raft && !off_map ) {
-              map[row][col] = '~';
-              on_raft = false;
-              have_raft = false;
-            } 
           break;
         }
         row = new_row;
