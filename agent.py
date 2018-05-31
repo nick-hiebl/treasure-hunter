@@ -453,11 +453,6 @@ class World:
 
                 leavable = False
                 # Decide whether a zone can be left once visited
-
-                # If we can make another boat, then we're good
-                # Apparently we cannot hold multiple rafts, so nevermind
-                # if 'w' in inventory:
-                #     leavable = True
                 # If there are trees (we must have an axe by this point)
                 if self.n_trees[zone] > 0:
                     leavable = True
@@ -655,11 +650,18 @@ def run_ai():
 
             # Try visiting somewhere that will show new info
             if not path:
-                # path = find_nearest(needs_visiting, SAFETOWALK, position)
+                # Consider all shortest paths to locations that reveal new stuff
                 paths = world.find_nearest_paths(NEEDSVISITING, SAFETOWALK, player.position)
                 if paths:
-                    paths.sort(key=lambda x: -VISITVALUE(world, x[0]))
-                    path = paths[0]
+                    # Choose the path that reveals the most info
+                    val = -VISITVALUE(world, paths[0][0])
+                    best = paths[0]
+                    for thing in paths:
+                        print(thing)
+                        v = -VISITVALUE(world, thing[0])
+                        if v < val:
+                            best = thing
+                    path = best
 
             # At this point we need to ensure that the world has been analysed for next steps
             if not path:
@@ -684,11 +686,18 @@ def run_ai():
                         else:
                             # Going by boat
                             path = world.find_nearest(GOTO(a[-1]), LAND, player.position, False)
-        else: # in_boat
+        else:
+            # Try visiting everywhere in the water that you can
             paths = world.find_nearest_paths(NEEDSVISITING, WATER, player.position)
             if paths:
-                paths.sort(key=lambda x: -VISITVALUE(world, x[0]))
-                path = paths[0]
+                # Choose the path that reveals the most info
+                val = -VISITVALUE(world, paths[0][0])
+                best = paths[0]
+                for thing in paths:
+                    v = -VISITVALUE(world, thing[0])
+                    if v < val:
+                        best = thing
+                path = best
 
             if not path:
                 target_zone = world.choose_landing_zone(player.inventory, player.position)
@@ -699,7 +708,6 @@ def run_ai():
             raise Error
 
         while path:
-            # first = path[-1]
             first = path.pop()
 
             actions = []
@@ -708,6 +716,7 @@ def run_ai():
 
             actions = player.get_direction_to_moves(way)
 
+            # Change the action if walking into an obstacle
             if TREE(world, first):
                 actions.remove('f')
                 actions.append('c')
