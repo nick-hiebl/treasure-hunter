@@ -15,7 +15,7 @@ from queue import PriorityQueue
 import time
 import cProfile
 
-WORLD_SIZE = 100
+WORLD_SIZE = 160
 
 class World:
     def __init__(self):
@@ -284,6 +284,13 @@ class World:
                     count += 1
         return count
 
+    def zone_needs_visiting(self, zone):
+        for i in range(self.XMIN, self.XMAX+1):
+            for j in range(self.YMIN, self.YMAX+1):
+                if self.needs_visiting((i, j)):
+                    return True
+        return False
+
     def zone_plain(self, zone):
         interesting = False
         for i in range(self.XMIN, self.XMAX+1):
@@ -477,6 +484,10 @@ class World:
                 if self.zone_has(zone, '$'):
                     value += 0.1
 
+                # If zone has stuff I haven't seen then that's great
+                if self.zone_needs_visiting(zone):
+                    value += 5
+
                 # If there are some rocks so we can probably do stuff
                 if self.n_stones[zone]:
                     value += 1
@@ -572,6 +583,7 @@ TREE = lambda w, p: w.access(p) == 'T'
 SAFETOSTONE = lambda w, p: w.access(p) in [' ', 'O', 'k', 'a', 'o', '$']
 STONE = lambda w, p: w.access(p) == 'o'
 SAFETOGOLD = lambda w, p: w.access(p) in [' ', 'O', 'k', 'a', 'o', '$']
+SAFETOGOLDWITHAXE = lambda w, p: w.access(p) in [' ', 'O', 'k', 'a', 'T', '$']
 GOLD = lambda w, p: w.access(p) == '$'
 
 NEEDSVISITING = lambda w, p: w.needs_visiting(p)
@@ -635,9 +647,12 @@ def run_ai():
                 path = world.find_nearest(GOTO((WORLD_SIZE//2, WORLD_SIZE//2)), SAFETOWALK, player.position)
             # Find the gold
             if not path:
-                path = world.find_nearest(GOLD, SAFETOGOLD, player.position)
+                if player.has('a'):
+                    path = world.find_nearest(GOLD, SAFETOGOLDWITHAXE, player.position)
+                else:
+                    path = world.find_nearest(GOLD, SAFETOGOLD, player.position)
             # Try cutting a tree
-            if not path and player.has('a'):
+            if not path and player.has('a') and not player.has('w'):
                 path = world.find_nearest(TREE, SAFETOWALK, player.position, False)
             # Try unlocking a door
             if not path and player.has('k'):
@@ -701,7 +716,7 @@ def run_ai():
 
             if not path:
                 target_zone = world.choose_landing_zone(player.inventory, player.position)
-                path = world.find_nearest(lambda w, p: world.get_root(p) == target_zone, WATER, player.position, False)
+                path = world.find_nearest(lambda w, p: world.get_root(p) == target_zone and not TREE(w, p), WATER, player.position, False)
 
         if not path:
             print("Well this is it then. I have failed.")
@@ -713,6 +728,7 @@ def run_ai():
             actions = []
 
             way = player.get_direction_to(first)
+            print(way)
 
             actions = player.get_direction_to_moves(way)
 
@@ -720,9 +736,11 @@ def run_ai():
             if TREE(world, first):
                 actions.remove('f')
                 actions.append('c')
+                actions.append('f')
             if DOOR(world, first):
                 actions.remove('f')
                 actions.append('u')
+                actions.append('f')
             if WATER(world, first):
                 analysed = False
                 needs_analysis = True
