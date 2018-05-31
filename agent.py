@@ -290,10 +290,11 @@ class World:
             if interesting:
                 break
             for j in range(self.YMIN, self.YMAX+1):
-                if self.get_root((i, j)) == zone and \
-                        self.world[j][i] != ' ':
-                    interesting = True
-                    break
+                if self.get_root((i, j)) == zone:
+                    if self.world[j][i] != ' ' or \
+                            self.needs_visiting((i, j)):
+                        interesting = True
+                        break
         return not interesting
 
     def zone_just_stones(zone, inventory):
@@ -657,7 +658,6 @@ def run_ai():
                     val = -VISITVALUE(world, paths[0][0])
                     best = paths[0]
                     for thing in paths:
-                        print(thing)
                         v = -VISITVALUE(world, thing[0])
                         if v < val:
                             best = thing
