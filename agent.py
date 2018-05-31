@@ -469,14 +469,14 @@ class World:
                 # If there is a key
                 if (not 'k' in inventory) and self.zone_has(zone, 'k'):
                     value += 3
-                # If there is wood
+                # If there is wood then it's probably a nice place
                 if self.n_trees[zone]:
                     value += 2
-                # If there is the treasure
+                # If there is the treasure then that's of marginal value
                 if self.zone_has(zone, '$'):
                     value += 0.1
 
-                # If there are some rocks so we can probably merge things
+                # If there are some rocks so we can probably do stuff
                 if self.n_stones[zone]:
                     value += 1
 
