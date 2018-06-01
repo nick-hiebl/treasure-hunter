@@ -403,22 +403,36 @@ class World:
         # If there's nowhere we can go, then just head for the water
         if len(options_to.keys()) == 0:
             w = self.choose_boat_start(start, inventory, position)
-            print(w)
             path = self.find_nearest(GOTO(w), SAFETOWALK, position, False)
-            print(path)
             return (False, path)
         return (False, None)
 
+    # Choose a place to head into the water from
+    # Returns a water tile adjacent to the start zone
     def choose_boat_start(self, start, inventory, position):
+        # Try choosing a body of water which is meaningful to enter
+        # that we can actually get to
         for w in self.water[start]:
             if self.find_nearest(GOTO(w), SAFETOWALK, position, False):
                 landing_zone = self.choose_landing_zone(inventory, w)
                 if landing_zone:
                     return w
+        # Try choosing any body of water
         for w in self.water[start]:
             landing_zone = self.choose_landing_zone(inventory, w)
             if landing_zone:
                 return w
+        # Choose any block of water we can walk to
+        for w in self.water[start]:
+            p = self.find_nearest(WATER, SAFETOWALK, position, False)
+            if p:
+                return p[0]
+        # Choose any block of water we have to chop a tree for
+        if 'a' in inventory:
+            p = self.find_nearest(WATER, SAFETOTREE, position, False)
+            if p:
+                return p[0]
+
 
     # Determine if a zone has enough stones to reach another zone
     def zone_exitable_by_stones(self, start):
