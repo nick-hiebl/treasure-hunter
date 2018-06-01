@@ -283,11 +283,16 @@ class World:
                     count += 1
         return count
 
+    # Check if a zone has any tiles that need revealing without having
+    # to clobber anything
     def zone_needs_visiting(self, zone):
         for i in range(self.XMIN, self.XMAX+1):
             for j in range(self.YMIN, self.YMAX+1):
-                if self.needs_visiting((i, j)):
-                    return True
+                if self.get_root((i, j)) == zone:
+                    if not SAFETOSTONE(self, (i, j)):
+                        continue
+                    if self.needs_visiting((i, j)):
+                        return True
         return False
 
     def zone_plain(self, zone):
@@ -411,15 +416,26 @@ class World:
     def choose_boat_start(self, start, inventory, position):
         # Try choosing a body of water which is meaningful to enter
         # that we can actually get to
+        options = []
         for w in self.water[start]:
             if self.find_nearest(GOTO(w), SAFETOWALK, position, False):
                 landing_zone = self.choose_landing_zone(inventory, w)
-                if landing_zone:
-                    return w
+                if landing_zone and landing_zone != start:
+                    found = False
+                    for thing in options:
+                        if thing[1] == landing_zone:
+                            found = True
+                            break
+                    if not found:
+                        options.append((w, landing_zone))
+        if options:
+            options.sort(key=lambda x: -self.evaluate_zone(x[1], inventory))
+            return options[0][0]
+
         # Try choosing any body of water
         for w in self.water[start]:
             landing_zone = self.choose_landing_zone(inventory, w)
-            if landing_zone:
+            if landing_zone and landing_zone != start:
                 return w
         # Choose any block of water we can walk to
         for w in self.water[start]:
@@ -449,16 +465,45 @@ class World:
                     return True
         return False
 
+    def evaluate_zone(self, zone, inventory):
+        value = 0
+
+        # If there is a key
+        if (not 'k' in inventory) and self.zone_has(zone, 'k'):
+            value += 3
+        # If there is wood then it's probably a nice place
+        if self.n_trees[zone]:
+            value += 2
+        # If there is the treasure then that's of marginal value
+        if self.zone_has(zone, '$'):
+            value += 0.1
+
+        # If zone has stuff I haven't seen then that's great
+        if self.zone_needs_visiting(zone):
+            value += 5
+
+        # If there are some rocks so we can probably do stuff
+        if self.n_stones[zone]:
+            value += 1
+
+        return value
+
     def choose_landing_zone(self, inventory, position):
         in_zone = lambda zone: (lambda w, p: self.get_root(p) == zone)
         reachable = []
 
         # A quick first pass over zones to check if obvious candidates exist
         num_interesting = 0
+
+        home_zone = self.get_root((WORLD_SIZE//2, WORLD_SIZE//2))
+
+        # If we have the treasure and can take it home, then do it
+        if self.find_nearest(in_zone(home_zone), WATER, position, False) \
+                and '$' in inventory:
+            return home_zone
+
+        # Count how many zones are interesting
         for zone in self.zones:
-            # If we have the treasure and can take it home, then do it
-            if self.get_root((WORLD_SIZE//2, WORLD_SIZE//2)) == zone and '$' in inventory:
-                return zone
             if not self.zone_plain(zone):
                 num_interesting += 1
 
@@ -481,30 +526,14 @@ class World:
                 elif self.zone_exitable_by_stones(zone):
                     leavable = True
 
+                elif self.zone_needs_visiting(zone):
+                    leavable = True
+
                 # If you can't leave this zone then just forget about it
                 if not leavable:
                     continue
 
-                value = 0
-
-                # If there is a key
-                if (not 'k' in inventory) and self.zone_has(zone, 'k'):
-                    value += 3
-                # If there is wood then it's probably a nice place
-                if self.n_trees[zone]:
-                    value += 2
-                # If there is the treasure then that's of marginal value
-                if self.zone_has(zone, '$'):
-                    value += 0.1
-
-                # If zone has stuff I haven't seen then that's great
-                if self.zone_needs_visiting(zone):
-                    value += 5
-
-                # If there are some rocks so we can probably do stuff
-                if self.n_stones[zone]:
-                    value += 1
-
+                value = self.evaluate_zone(zone, inventory)
                 if value:
                     reachable.append((value, zone))
         if not reachable:
@@ -563,7 +592,10 @@ class Player:
             if self.on_boat:
                 if not WATER(self.world, self.position):
                     self.on_boat = False
-            if self.world.access(self.position) in 'ako$':
+            thing = self.world.access(self.position)
+            if thing in 'o$':
+                self.inventory.append(thing)
+            if thing in 'ak' and thing not in self.inventory:
                 self.inventory.append(self.world.access(self.position))
 
             if self.world.access(self.position) == '~':
@@ -686,7 +718,8 @@ def run_ai():
                 # Consider all shortest paths to locations that reveal new stuff
                 paths = world.find_nearest_paths(NEEDSVISITING, SAFETOWALK, player.position)
                 if paths:
-                    # Choose the path that reveals the most info
+                    # Choose the path that reveals the most info using
+                    # a linear scan
                     val = -VISITVALUE(world, paths[0][0])
                     best = paths[0]
                     for thing in paths:
@@ -721,11 +754,16 @@ def run_ai():
             # If I can't do ANYTHING else, try cutting a tree even though I already have wood
             if not path and player.has('a'):
                 path = world.find_nearest(TREE, SAFETOWALK, player.position, False)
+
+            if not path:
+                path = world.find_nearest(STONE, SAFETOSTONE, player.position, True)
+        # The case whilst in a boat
         else:
             # Try visiting everywhere in the water that you can
             paths = world.find_nearest_paths(NEEDSVISITING, WATER, player.position)
             if paths:
-                # Choose the path that reveals the most info
+                # Choose the path that reveals the most info using a
+                # linear scan
                 val = -VISITVALUE(world, paths[0][0])
                 best = paths[0]
                 for thing in paths:
@@ -733,14 +771,14 @@ def run_ai():
                     if v < val:
                         best = thing
                 path = best
-
+            # Try choosing somewhere to land
             if not path:
                 target_zone = world.choose_landing_zone(player.inventory, player.position)
                 path = world.find_nearest(lambda w, p: world.get_root(p) == target_zone and not TREE(w, p), WATER, player.position, False)
 
         if not path:
             print("Well this is it then. I have failed.")
-            raise Error
+            raise ValueError
 
         while path:
             first = path.pop()
