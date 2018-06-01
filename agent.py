@@ -223,7 +223,6 @@ class World:
         self.XMAX = max(self.XMAX, position[0] + 2)
         self.YMAX = max(self.YMAX, position[1] + 2)
 
-        # print(data)
         while 1:
             data = sock.recv(100)
             if not data:
@@ -704,8 +703,6 @@ def run_ai():
             # Try determining what to do next in terms of actions over water
             if not path:
                 possibly_stone, a = world.get_water_actions(world.get_root(player.position), player.inventory, player.position)
-                # TODO: SOLVE LEVEL s22.in
-                print(a)
                 if a:
                     if not possibly_stone:
                         path = world.find_nearest(GOTO(a[-1]), SAFETOWALK, player.position, False)
@@ -751,7 +748,6 @@ def run_ai():
             actions = []
 
             way = player.get_direction_to(first)
-            print(way)
 
             actions = player.get_direction_to_moves(way)
 
