@@ -67,15 +67,25 @@ class World:
 
         return None
 
+    # Performs a BFS on the map, searching for a place satisfying the
+    # objective function whilst only traversing tiles satisfying the
+    # permitted function. Starts at the start location* and if walkable
+    # is true then the objective must satisfy the objective function.
+    #
+    # *start can be a list of starting locations which are all equal
     def find_nearest(self, objective, permitted, start, walkable=True, limit=100000):
-        empty = None
-
         queue = deque()
-        queue.append((0, start))
 
         seen = {}
         prev = {}
-        prev[start] = (-1, -1)
+
+        if type(start) == list:
+            for pos in start:
+                prev[pos] = (-1, -1)
+                queue.append((0, pos))
+        else:
+            prev[start] = (-1, -1)
+            queue.append((0, start))
 
         nearest = (-1, -1)
 
@@ -114,9 +124,16 @@ class World:
         else:
             out = [nearest]
             nearest = prev[nearest]
-            while nearest != start and nearest != (-1, -1):
-                out.append(nearest)
-                nearest = prev[nearest]
+            if type(start) == list:
+                # Here we want to ensure we return the start location
+                # so that the user knows about it
+                while nearest != (-1, -1):
+                    out.append(nearest)
+                    nearest = prev[nearest]
+            else:
+                while nearest != start and nearest != (-1, -1):
+                    out.append(nearest)
+                    nearest = prev[nearest]
             return out
 
     def find_nearest_paths(self, objective, permitted, start, walkable=True, limit=100000):
@@ -267,12 +284,12 @@ class World:
         self.parent[A[1]][A[0]] = B
 
     def flood_fill(self, X):
-        if not LAND(self, X): return
         x, y = X
         others = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
-        for o in others:
-            if LAND(self, o) and self.get_root(o) != self.get_root(X):
-                self.merge(o, X)
+        if LAND(self, X):
+            for o in others:
+                if LAND(self, o) and self.get_root(o) != self.get_root(X):
+                    self.merge(o, X)
 
     def zone_has(self, zone, item):
         count = 0
@@ -328,6 +345,9 @@ class World:
         # Generate a union out of contiguous zones of land
         for i in range(self.XMIN, self.XMAX + 1):
             for j in range(self.YMIN, self.YMAX + 1):
+                self.parent[i][j] = (j, i)
+        for i in range(self.XMIN, self.XMAX + 1):
+            for j in range(self.YMIN, self.YMAX + 1):
                 self.flood_fill((i, j))
         # Collect all sets of land
         self.water.clear()
@@ -336,22 +356,25 @@ class World:
         for i in range(self.XMIN, self.XMAX + 1):
             for j in range(self.YMIN, self.YMAX + 1):
                 if LAND(self, (i, j)):
-                    self.water[self.get_root((i, j))] = []
-                    self.n_stones[self.get_root((i, j))] = 0
-                    self.n_trees[self.get_root((i, j))] = 0
+                    zone = self.get_root((i, j))
+                    self.water[zone] = []
+                    self.n_stones[zone] = 0
+                    self.n_trees[zone] = 0
         # Add all water blocks adjacent to land
         for i in range(self.XMIN, self.XMAX + 1):
             for j in range(self.YMIN, self.YMAX + 1):
+                zone = self.get_root((i, j))
                 if STONE(self, (i, j)):
-                    self.n_stones[self.get_root((i, j))] += 1
+                    self.n_stones[zone] += 1
                 if TREE(self, (i, j)):
-                    self.n_trees[self.get_root((i, j))] += 1
+                    self.n_trees[zone] += 1
                 if WATER(self, (i, j)):
                     neighbours = [(i + 1, j), (i - 1, j),
                         (i, j + 1), (i, j - 1)]
                     for n in neighbours:
                         if LAND(self, n):
-                            self.water[self.get_root(n)].append((i, j))
+                            if not (i, j) in self.water[self.get_root(n)]:
+                                self.water[self.get_root(n)].append((i, j))
 
         self.zones = self.water.keys()
 
@@ -368,21 +391,20 @@ class World:
             limit = 100000
 
         # Determine closest way to get to all other zones
-        for w in self.water[start]:
-            # Consider other zones
-            for other in self.zones:
-                if other == start:
-                    continue
-                p = self.find_nearest(in_zone(other), WATER, w, \
-                    False, limit=limit)
-                # If we can reach this zone
-                if p:
-                    p.append(w)
-                    if not other in options_to:
+        # Consider other zones
+        for other in self.zones:
+            if other == start:
+                continue
+            p = self.find_nearest(in_zone(other), WATER, self.water[start], \
+                False, limit=limit)
+            # If we can reach this zone
+            if p:
+                if not other in options_to:
+                    options_to[other] = (len(p), p)
+                else:
+                    if len(p) < options_to[other][0]:
                         options_to[other] = (len(p), p)
-                    else:
-                        if len(p) < options_to[other][0]:
-                            options_to[other] = (len(p), p)
+
         # If there's only one place we can go, then go there
         if len(options_to.keys()) == 1:
             other = list(options_to.keys())[0]
@@ -438,10 +460,9 @@ class World:
             if landing_zone and landing_zone != start:
                 return w
         # Choose any block of water we can walk to
-        for w in self.water[start]:
-            p = self.find_nearest(WATER, SAFETOWALK, position, False)
-            if p:
-                return p[0]
+        p = self.find_nearest(WATER, SAFETOWALK, position, False)
+        if p:
+            return p[0]
         # Choose any block of water we have to chop a tree for
         if 'a' in inventory:
             p = self.find_nearest(WATER, SAFETOTREE, position, False)
