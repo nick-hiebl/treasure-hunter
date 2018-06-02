@@ -72,7 +72,7 @@ class World:
     # permitted function. Starts at the start location* and if walkable
     # is true then the objective must satisfy the objective function.
     #
-    # *start can be a list of starting locations which are all equal
+    # *start can be a list of starting locations to search from
     def find_nearest(self, objective, permitted, start, walkable=True, limit=100000):
         queue = deque()
 
@@ -505,7 +505,7 @@ class World:
 
         # If there are some rocks so we can probably do stuff
         if self.n_stones[zone]:
-            value += 1
+            value += self.n_stones[zone]
 
         return value
 
