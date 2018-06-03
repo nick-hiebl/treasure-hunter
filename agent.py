@@ -37,11 +37,11 @@
 # sections of land, which meant many checks of what island a tile
 # belongs to could be done in constant time (technically O(n), but it is
 # amortised to O(1) here as many calls are done on each tile, making the
-# forest incredibly tight).
-#
-# This allowed me to perform many many operations on islands quickly as
-# I could identify or evalute regions very quickly without repeated
-# flood fill operations.
+# forest incredibly tight). This allowed me to perform many operations
+# on islands quickly as I could identify or evalute regions very quickly
+# without repeated flood fill or search operations. It allowed me to
+# think of water puzzles in terms of "zones" of land, rather than at
+# the individual tile level.
 
 import sys
 import socket
