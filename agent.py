@@ -512,7 +512,6 @@ class World:
     def choose_landing_zone(self, inventory, position):
         in_zone = lambda zone: (lambda w, p: self.get_root(p) == zone)
         reachable = []
-
         # A quick first pass over zones to check if obvious candidates exist
         num_interesting = 0
 
@@ -557,8 +556,10 @@ class World:
                 value = self.evaluate_zone(zone, inventory)
                 if value:
                     reachable.append((value, zone))
+
         if not reachable:
             return None
+
         reachable.sort(key=lambda x: -x[0])
         return reachable[0][1]
 
@@ -569,6 +570,9 @@ class Player:
         self.inventory = inventory
         self.world = world
         self.on_boat = on_boat
+
+        self.moves = []
+        self.actions = []
 
     def has(self, thing):
         return thing in self.inventory
@@ -593,6 +597,143 @@ class Player:
             return 0
         if self.position == (x, y - 1):
             return 2
+
+    def get_land_moves(self):
+        world = self.world
+        path = []
+        # Take the gold home
+        if '$' in self.inventory:
+            # # TODO: Make it so that you can chop trees on the way home
+            if self.has('a'):
+                path = world.find_nearest(GOTO((WORLD_SIZE//2, WORLD_SIZE//2)), SAFETOTREE, self.position)
+            else:
+                path = world.find_nearest(GOTO((WORLD_SIZE//2, WORLD_SIZE//2)), SAFETOWALK, self.position)
+        # Find the gold
+        if not path:
+            if self.has('a'):
+                path = world.find_nearest(GOLD, SAFETOGOLDWITHAXE, self.position)
+            else:
+                path = world.find_nearest(GOLD, SAFETOGOLD, self.position)
+        # Try cutting a tree
+        if not path and self.has('a') and not self.has('w'):
+            path = world.find_nearest(TREE, SAFETOWALK, self.position, False)
+        # Try unlocking a door
+        if not path and self.has('k'):
+            path = world.find_nearest(DOOR, SAFETOWALK, self.position, False)
+        # Try picking up an axe
+        if not path and (not self.has('a')):
+            path = world.find_nearest(AXE, SAFETOWALK, self.position, True)
+        # Try picking up a key
+        if not path and (not self.has('k')):
+            path = world.find_nearest(KEY, SAFETOWALK, self.position, True)
+
+        # Try visiting somewhere that will show new info
+        if not path:
+            # Consider all shortest paths to locations that reveal new stuff
+            paths = world.find_nearest_paths(NEEDSVISITING, SAFETOWALK, self.position)
+            if paths:
+                # Choose the path that reveals the most info using
+                # a linear scan
+                val = -VISITVALUE(world, paths[0][0])
+                best = paths[0]
+                for thing in paths:
+                    v = -VISITVALUE(world, thing[0])
+                    if v < val:
+                        best = thing
+                path = best
+
+        # At this point we need to ensure that the world has been analysed for next steps
+        if not path:
+            world.analyse(self.position)
+            analysed = True
+
+        # Try determining what to do next in terms of actions over water
+        if not path:
+            possibly_stone, a = world.get_water_actions(world.get_root(self.position), self.inventory, self.position)
+            if a:
+                if not possibly_stone:
+                    path = world.find_nearest(GOTO(a[-1]), SAFETOWALK, self.position, False)
+                elif self.has('o'):
+                    # Place a stone
+                    path = world.find_nearest(GOTO(a[-1]), SAFETOSTONE, self.position, False)
+                else:
+                    # Try doing it with stones
+                    if world.n_stones[world.get_root(self.position)] + 1 >= len(a):
+                        # Get a stone
+                        path = world.find_nearest(STONE, SAFETOSTONE, self.position)
+                    else:
+                        # Going by boat
+                        path = world.find_nearest(GOTO(a[-1]), LAND, self.position, False)
+
+        # If I can't do ANYTHING else, try cutting a tree even though I already have wood
+        if not path and self.has('a'):
+            path = world.find_nearest(TREE, SAFETOWALK, self.position, False)
+
+        if not path:
+            path = world.find_nearest(STONE, SAFETOSTONE, self.position, True)
+
+        return path
+
+    def get_water_moves(self):
+
+        path = []
+        # Try visiting everywhere in the water that you can
+        paths = self.world.find_nearest_paths(NEEDSVISITING, WATER, self.position)
+        if paths:
+            # Choose the path that reveals the most info using a
+            # linear scan
+            val = -VISITVALUE(self.world, paths[0][0])
+            best = paths[0]
+            for thing in paths:
+                v = -VISITVALUE(self.world, thing[0])
+                if v < val:
+                    best = thing
+            path = best
+        # Try choosing somewhere to land
+        if not path:
+            self.world.analyse(self.position)
+            target_zone = self.world.choose_landing_zone(self.inventory, self.position)
+            path = self.world.find_nearest(lambda w, p: self.world.get_root(p) == target_zone and not TREE(w, p), WATER, self.position, False)
+
+        return path
+
+    def get_moves(self):
+        path = []
+        if not self.on_boat:
+            path = self.get_land_moves()
+        # The case whilst in a boat
+        else:
+            path = self.get_water_moves()
+
+        return path
+
+    def get_action(self):
+        if self.actions:
+            return self.actions.pop(0)
+
+        if not self.moves:
+            self.moves = self.get_moves()
+
+        first = self.moves.pop()
+
+        actions = []
+
+        way = self.get_direction_to(first)
+
+        actions = self.get_direction_to_moves(way)
+
+        # Change the action if walking into an obstacle
+        if TREE(self.world, first):
+            actions.remove('f')
+            actions.append('c')
+            actions.append('f')
+        if DOOR(self.world, first):
+            actions.remove('f')
+            actions.append('u')
+            actions.append('f')
+
+        self.actions = actions
+        return self.actions.pop(0)
 
     def view_to_offset(self, x, y):
         if self.direction == 0:
@@ -694,144 +835,18 @@ def run_ai():
          print('Connection refused, check host is running')
          sys.exit()
 
-    # navigates through grid with input stream of data
-    i = 0
-    j = 0
-
     world.read_in(sock, player)
     while 1:
-        path = []
+        # Get the next action from the player
+        action = player.get_action()
 
-        if needs_analysis:
-            world.analyse(player.position)
-            analysed = True
-            needs_analysis = False
+        moves += 1
 
-        if not player.on_boat:
-            # Take the gold home
-            if '$' in player.inventory:
-                # # TODO: Make it so that you can chop trees on the way home
-                if player.has('a'):
-                    path = world.find_nearest(GOTO((WORLD_SIZE//2, WORLD_SIZE//2)), SAFETOTREE, player.position)
-                else:
-                    path = world.find_nearest(GOTO((WORLD_SIZE//2, WORLD_SIZE//2)), SAFETOWALK, player.position)
-            # Find the gold
-            if not path:
-                if player.has('a'):
-                    path = world.find_nearest(GOLD, SAFETOGOLDWITHAXE, player.position)
-                else:
-                    path = world.find_nearest(GOLD, SAFETOGOLD, player.position)
-            # Try cutting a tree
-            if not path and player.has('a') and not player.has('w'):
-                path = world.find_nearest(TREE, SAFETOWALK, player.position, False)
-            # Try unlocking a door
-            if not path and player.has('k'):
-                path = world.find_nearest(DOOR, SAFETOWALK, player.position, False)
-            # Try picking up an axe
-            if not path and (not player.has('a')):
-                path = world.find_nearest(AXE, SAFETOWALK, player.position, True)
-            # Try picking up a key
-            if not path and (not player.has('k')):
-                path = world.find_nearest(KEY, SAFETOWALK, player.position, True)
-
-            # Try visiting somewhere that will show new info
-            if not path:
-                # Consider all shortest paths to locations that reveal new stuff
-                paths = world.find_nearest_paths(NEEDSVISITING, SAFETOWALK, player.position)
-                if paths:
-                    # Choose the path that reveals the most info using
-                    # a linear scan
-                    val = -VISITVALUE(world, paths[0][0])
-                    best = paths[0]
-                    for thing in paths:
-                        v = -VISITVALUE(world, thing[0])
-                        if v < val:
-                            best = thing
-                    path = best
-
-            # At this point we need to ensure that the world has been analysed for next steps
-            if not path:
-                world.analyse(player.position)
-                analysed = True
-
-            # Try determining what to do next in terms of actions over water
-            if not path:
-                possibly_stone, a = world.get_water_actions(world.get_root(player.position), player.inventory, player.position)
-                if a:
-                    if not possibly_stone:
-                        path = world.find_nearest(GOTO(a[-1]), SAFETOWALK, player.position, False)
-                    elif player.has('o'):
-                        # Place a stone
-                        path = world.find_nearest(GOTO(a[-1]), SAFETOSTONE, player.position, False)
-                    else:
-                        # Try doing it with stones
-                        if world.n_stones[world.get_root(player.position)] + 1 >= len(a):
-                            # Get a stone
-                            path = world.find_nearest(STONE, SAFETOSTONE, player.position)
-                        else:
-                            # Going by boat
-                            path = world.find_nearest(GOTO(a[-1]), LAND, player.position, False)
-
-            # If I can't do ANYTHING else, try cutting a tree even though I already have wood
-            if not path and player.has('a'):
-                path = world.find_nearest(TREE, SAFETOWALK, player.position, False)
-
-            if not path:
-                path = world.find_nearest(STONE, SAFETOSTONE, player.position, True)
-        # The case whilst in a boat
-        else:
-            # Try visiting everywhere in the water that you can
-            paths = world.find_nearest_paths(NEEDSVISITING, WATER, player.position)
-            if paths:
-                # Choose the path that reveals the most info using a
-                # linear scan
-                val = -VISITVALUE(world, paths[0][0])
-                best = paths[0]
-                for thing in paths:
-                    v = -VISITVALUE(world, thing[0])
-                    if v < val:
-                        best = thing
-                path = best
-            # Try choosing somewhere to land
-            if not path:
-                target_zone = world.choose_landing_zone(player.inventory, player.position)
-                path = world.find_nearest(lambda w, p: world.get_root(p) == target_zone and not TREE(w, p), WATER, player.position, False)
-
-        if not path:
-            print("Well this is it then. I have failed.")
-            raise ValueError
-
-        while path:
-            first = path.pop()
-
-            actions = []
-
-            way = player.get_direction_to(first)
-
-            actions = player.get_direction_to_moves(way)
-
-            # Change the action if walking into an obstacle
-            if TREE(world, first):
-                actions.remove('f')
-                actions.append('c')
-                actions.append('f')
-            if DOOR(world, first):
-                actions.remove('f')
-                actions.append('u')
-                actions.append('f')
-            if WATER(world, first):
-                analysed = False
-                needs_analysis = True
-
-            for action in actions:
-
-                moves += 1
-
-                player.update_state(action)
-                sock.send(action.encode('utf-8'))
-                world.read_in(sock, player)
-                player.print_world()
-                print(moves)
+        player.update_state(action)
+        sock.send(action.encode('utf-8'))
+        world.read_in(sock, player)
+        player.print_world()
+        print(moves)
 
     sock.close()
 
