@@ -1,12 +1,19 @@
 #!/usr/bin/python3
-# ^^ note the python directive on the first line
-# COMP 9414 agent initiation file
-# requires the host is running before the agent
-# designed for python 3.6
-# typical initiation would be (file in working directory, port = 31415)
-#        python3 agent.py -p 31415
-# created by Leo Hoare
-# with slight modifications by Alan Blair
+# Developed by Nicholas Hiebl z5159918
+# Based on template be Leo Hoare, modified by Alan Blair
+# Typical usage would be
+#       python3 agent.py -p 31415
+# or
+#       ./agent.py -p 31415
+#
+# The question:
+# Briefly describe how your program works, including any algorithms and
+# data structures employed, and explain any design decisions you made
+# along the way.
+#
+#
+#
+#
 
 import sys
 import socket
@@ -34,38 +41,13 @@ class World:
         self.XMAX = 0
         self.YMAX = 0
 
+    # Get the tile at a given pair of coordinates
     def access(self, position):
         return self.world[position[1]][position[0]]
 
+    # Store a value in the world
     def set(self, position, item):
         self.world[position[1]][position[0]] = item
-
-    def find_any(self, objective, permitted, start, walkable=True, seen=None):
-        if seen == None:
-            seen = {}
-
-        if start in seen:
-            return None
-        seen[start] = True
-
-        if walkable and not permitted(self, start):
-            return None
-
-        if objective(self, start):
-            return [start]
-
-        if not permitted(self, start):
-            return None
-
-        a, b = start
-        neighbours = [(a, b - 1), (a + 1, b), (a, b + 1), (a - 1, b)]
-
-        for n in neighbours:
-            p = find_any(self, objective, permitted, n, walkable, seen)
-            if p:
-                return p + [start]
-
-        return None
 
     # Performs a BFS on the map, searching for a place satisfying the
     # objective function whilst only traversing tiles satisfying the
@@ -74,19 +56,24 @@ class World:
     #
     # *start can be a list of starting locations to search from
     def find_nearest(self, objective, permitted, start, walkable=True, limit=100000):
+        # Use a queue to perform BFS
         queue = deque()
 
+        # Keep track of seen items and previous spaces with a dictionary
         seen = {}
         prev = {}
 
+        # If given a list of start points load them
         if type(start) == list:
             for pos in start:
                 prev[pos] = (-1, -1)
                 queue.append((0, pos))
+        # If given a single start point load that
         else:
             prev[start] = (-1, -1)
             queue.append((0, start))
 
+        # Assume that no target location can be found
         nearest = (-1, -1)
 
         while len(queue):
@@ -100,25 +87,34 @@ class World:
                 continue
             seen[current] = True
 
+            # Walkable indicates that the target location must
+            # satisfy the permitted function as well as the objective
+            # function
             if walkable and not permitted(self, current):
                 continue
 
+            # Check if a target location has been found
             if objective(self, current):
                 nearest = current
                 break
 
+            # If the location doesn't satisfy permitted, don't expand
+            # its neighbours
             if not permitted(self, current):
                 continue
 
             a, b = current
+            # Consider all adjacent locations
             neighbours = [(a, b - 1), (a + 1, b),
                 (a, b + 1), (a - 1, b)]
 
+            # Expand all four neighbours into our queue
             for n in neighbours:
                 if (not n in seen) and (not n in prev):
                     prev[n] = current
-                    queue.append((l+1, n))
+                    queue.append((l + 1, n))
 
+        # If nothing could be found, return an empty path
         if nearest == (-1, -1):
             return []
         else:
@@ -131,11 +127,15 @@ class World:
                     out.append(nearest)
                     nearest = prev[nearest]
             else:
+                # Do not return the starting location, as since only
+                # one location was given, the start must be known
                 while nearest != start and nearest != (-1, -1):
                     out.append(nearest)
                     nearest = prev[nearest]
             return out
 
+    # Perform a BFS as with the above function, but return a list of all
+    # paths of minimum length
     def find_nearest_paths(self, objective, permitted, start, walkable=True, limit=100000):
         queue = deque()
         queue.append((0, start))
@@ -153,6 +153,10 @@ class World:
                 return []
 
             if nearest:
+                # If we have already found SOME paths and we are now
+                # examining a path that is LONGER than that, then we
+                # should stop, as we are only trying to find shortest
+                # length paths
                 if l > length:
                     break
 
@@ -192,6 +196,8 @@ class World:
                 paths.append(out)
             return paths
 
+    # Returns true if visiting a position would reveal new locations
+    # in the world
     def needs_visiting(self, position):
         a, b = position
         for i in range(-2, 3):
@@ -200,6 +206,8 @@ class World:
                     return True
         return False
 
+    # Returns the number of locations within a 5x5 of a given position
+    # that have not yet been seen
     def how_many_need_visit(self, position):
         a, b = position
         num = 0
@@ -209,9 +217,13 @@ class World:
                     num += 1
         return num
 
+    # Print out info about the world
     def display(self, position, direction):
-        # time.sleep(0.1)
+        # Loops use YMIN, YMAX, XMIN, XMAX to ensure only the minimum
+        # amount needed to see the whole world is displayed
         s = " "
+        # "Axes" displaying the first digit of x, y coordinate are also
+        # displayed for debugging help
         for c in range(self.XMIN, self.XMAX + 1):
             s += str(c % 10)
         s += "\n"
@@ -229,9 +241,11 @@ class World:
 
         print(s)
 
-    def read_in(self, sock, player):
-        position = player.position
-        direction = player.direction
+    # Load up info about the world from a socket and store it in our
+    # world grid to update the world model
+    def read_in(self, sock, agent):
+        position = agent.position
+        direction = agent.direction
         i = 0
         j = 0
 
@@ -240,18 +254,21 @@ class World:
         self.XMAX = max(self.XMAX, position[0] + 2)
         self.YMAX = max(self.YMAX, position[1] + 2)
 
+        # Code copied basically from template
         while 1:
             data = sock.recv(100)
             if not data:
                 exit()
             for ch in data:
-                pos = player.view_to_offset(j - 2, i - 2)
+                # Transfer coordinates from being relative to view
+                # to being absolute coordinates in the world
+                pos = agent.view_to_offset(j - 2, i - 2)
                 if (i == 2 and j == 2):
                     if not self.world[position[1]][position[0]]:
                         self.world[position[1]][position[0]] = ' '
                     elif self.world[position[1]][position[0]] in 'ako$':
                         self.world[position[1]][position[0]] = ' '
-                    pos = player.view_to_offset(j - 1, i - 2)
+                    pos = agent.view_to_offset(j - 1, i - 2)
                     if not self.world[pos[1]][pos[0]]:
                         self.world[pos[1]][pos[0]] = chr(ch)
                     j += 1
@@ -264,7 +281,8 @@ class World:
             if i == 0 and j == 0:
                 return
 
-
+    # Using union find data structure to determine what "zone" a given
+    # coordinate is in
     def get_root(self, A):
         if self.parent[A[1]][A[0]] == A:
             return A
@@ -272,17 +290,22 @@ class World:
         self.parent[A[1]][A[0]] = root
         return root
 
+    # Use union find data structure to combine two disparate world
+    # regions into one
     def merge(self, A, B):
         if self.get_root(A) != self.get_root(B):
             p = self.parent[A[1]][A[0]]
             self.parent[p[1]][p[0]] = B
             self.parent[A[1]][A[0]] = B
 
+    # Union find data structure function to set the "root" or "zone"
+    # that a given location belongs to
     def set_root(self, A, B):
         p = self.get_root(A)
         self.parent[p[1]][p[0]] = B
         self.parent[A[1]][A[0]] = B
 
+    # Connect a tile to its adjacent neighbours if they're all on land
     def flood_fill(self, X):
         x, y = X
         others = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
@@ -291,6 +314,7 @@ class World:
                 if LAND(self, o) and self.get_root(o) != self.get_root(X):
                     self.merge(o, X)
 
+    # Scan through a zone and see if it contains a particular item
     def zone_has(self, zone, item):
         count = 0
         for i in range(self.XMIN, self.XMAX+1):
@@ -312,6 +336,7 @@ class World:
                         return True
         return False
 
+    # Check if a zone contains no meaningful info or tools
     def zone_plain(self, zone):
         interesting = False
         for i in range(self.XMIN, self.XMAX+1):
@@ -325,6 +350,7 @@ class World:
                         break
         return not interesting
 
+    # Check if a zone has nothing other than stones (or duplicate tools)
     def zone_just_stones(zone, inventory):
         nonstone = False
         for i in range(self.XMIN, self.XMAX+1):
@@ -341,6 +367,18 @@ class World:
                         break
         return not nonstone
 
+    # Analyse the world state using a union find data structure and
+    # create a few important points of data.
+    #
+    # World.parent stores the union find data structure
+    #
+    # World.water stores the water tiles which are on the boundary of
+    # a given zone
+    #
+    # World.n_stones and World.n_trees count the number of stones and
+    # trees in each zone
+    #
+    # World.zones stores the list of zones in the world
     def analyse(self, position):
         # Generate a union out of contiguous zones of land
         for i in range(self.XMIN, self.XMAX + 1):
@@ -380,6 +418,8 @@ class World:
 
     # Returns tuple, first a boolean, second a list which is the path
     # (do this with stones, a path across water)
+    #
+    # If the boolean is False then the trip should be made using a boat
     def get_water_actions(self, start, inventory, position):
         in_zone = lambda zone: (lambda w, p: w.get_root(p) == zone)
         options_to = {}
@@ -474,7 +514,6 @@ class World:
             if p:
                 return p[0]
 
-
     # Determine if a zone has enough stones to reach another zone
     def zone_exitable_by_stones(self, start):
         in_zone = lambda zone: (lambda w, p: self.get_root(p) == zone)
@@ -491,6 +530,7 @@ class World:
                     return True
         return False
 
+    # Assign a zone a numerical value based on the stuff it has in it
     def evaluate_zone(self, zone, inventory):
         value = 0
 
@@ -514,6 +554,7 @@ class World:
 
         return value
 
+    # Choose where to go back to land once in the water
     def choose_landing_zone(self, inventory, position):
         in_zone = lambda zone: (lambda w, p: self.get_root(p) == zone)
         reachable = []
@@ -568,7 +609,7 @@ class World:
         reachable.sort(key=lambda x: -x[0])
         return reachable[0][1]
 
-class Player:
+class Agent:
     def __init__(self, position, direction, inventory, on_boat, world):
         self.position = position
         self.direction = direction
@@ -579,9 +620,12 @@ class Player:
         self.moves = []
         self.actions = []
 
+    # Determine whether the agent has a certain thing in its inventory
     def has(self, thing):
         return thing in self.inventory
 
+    # Given the direction you want to move in, return a list of moves
+    # that will get you there
     def get_direction_to_moves(self, way):
         if way == self.direction:
             return ['f']
@@ -592,6 +636,8 @@ class Player:
         else:
             return ['r', 'r', 'f']
 
+    # Given a tile adjacent to you, return the absolute direction you
+    # must travel in to get there
     def get_direction_to(self, after):
         x, y = after
         if self.position == (x + 1, y):
@@ -603,6 +649,21 @@ class Player:
         if self.position == (x, y - 1):
             return 2
 
+    # Get the moves that you should make on land
+    #
+    # The overall strategy is as follows:
+    #
+    # Attempt the first of these strategies you can do:
+    # - Get the gold home
+    # - Get TO the gold
+    # - Get a raft by cutting a tree
+    # - Open a door
+    # - Get an axe
+    # - Get a key
+    # - Go somewhere that reveals a bunch of info
+    # - Try going across the water with stones or a raft
+    # - Cut down a tree even though I have a raft
+    # - Pick up a stone
     def get_land_moves(self):
         world = self.world
         path = []
@@ -657,7 +718,12 @@ class Player:
             possibly_stone, a = world.get_water_actions(world.get_root(self.position), self.inventory, self.position)
             if a:
                 if not possibly_stone:
-                    path = world.find_nearest(GOTO(a[-1]), SAFETOWALK, self.position, False)
+                    if self.has('w'):
+                        # If it must be by boat, go by boat
+                        path = world.find_nearest(GOTO(a[-1]), SAFETOWALK, self.position, False)
+                    else:
+                        # If you don't have a boat, perhaps try getting some stones
+                        path = world.find_nearest(STONE, SAFETOSTONE, self.position, False)
                 elif self.has('o'):
                     # Place a stone
                     path = world.find_nearest(GOTO(a[-1]), SAFETOSTONE, self.position, False)
@@ -673,12 +739,17 @@ class Player:
         # If I can't do ANYTHING else, try cutting a tree even though I already have wood
         if not path and self.has('a'):
             path = world.find_nearest(TREE, SAFETOWALK, self.position, False)
-
+        # If I can't do ANYTHING else, try picking up a stone
         if not path:
             path = world.find_nearest(STONE, SAFETOSTONE, self.position, True)
 
         return path
 
+    # Get the moves that you should make whilst on water
+    #
+    # The overall strategy is as follows:
+    # If you can explore the sea, explore it
+    # Otherwise find somewhere to land
     def get_water_moves(self):
 
         path = []
@@ -702,6 +773,7 @@ class Player:
 
         return path
 
+    # Find a path to take
     def get_moves(self):
         path = []
         if not self.on_boat:
@@ -712,6 +784,7 @@ class Player:
 
         return path
 
+    # Get the next action to make
     def get_action(self):
         if self.actions:
             return self.actions.pop(0)
@@ -740,6 +813,8 @@ class Player:
         self.actions = actions
         return self.actions.pop(0)
 
+    # Convert a relative position in the view field to absolute
+    # coordinates in the world
     def view_to_offset(self, x, y):
         if self.direction == 0:
             return (self.position[0] + x, self.position[1] + y)
@@ -750,6 +825,7 @@ class Player:
         else:
             return (self.position[0] + y, self.position[1] - x)
 
+    # Based on a given move, determine how this affects the world
     def update_state(self, action):
         if action in 'cC' and 'a' in self.inventory:
             if 'w' not in self.inventory:
@@ -780,13 +856,18 @@ class Player:
         elif action in 'rR':
             self.direction = (self.direction + 1) % 4
 
+    # Print out the world
     def print_world(self):
         self.world.display(self.position, self.direction)
         print("holding [", ", ".join(self.inventory), "]")
 
-GOTO = lambda x: (lambda w, p: p == x)
-DISTTO = lambda x: (lambda w, p: abs(p[0] - x[0]) + abs(p[1] - x[1]))
+# A bunch of helpful lambda functions used to simplify state information
+# into slightly simpler yes/no condition
 
+# Returns if a given coordinate is the one we're looking for
+GOTO = lambda x: (lambda w, p: p == x)
+
+# A bunch of lambdas expressing whether certain items can be reached
 SAFETOWALK = lambda w, p: w.access(p) in [' ', 'O', 'k', 'a', '$']
 SAFETODOOR = lambda w, p: w.access(p) in [' ', 'O', 'k', 'a', '-', '$']
 DOOR = lambda w, p: w.access(p) == '-'
@@ -807,25 +888,28 @@ KEY = lambda w, p: w.access(p) == 'k'
 LAND = lambda w, p: w.access(p) in [' ', 'o', 'k', 'a', 'O', '$', 'T', '-']
 WATER = lambda w, p: w.access(p) == '~'
 
+# Main function used to run everything
 def run_ai():
     moves = 0
 
+    # Agent starts in the middle of the world grid
     origin = (WORLD_SIZE//2, WORLD_SIZE//2)
 
+    # Initialise agent, world objects
     world = World()
-    player = Player(origin, 0, [], False, world)
+    agent = Agent(origin, 0, [], False, world)
 
     analysed = False
     needs_analysis = False
 
-    # checks for correct amount of arguments
+    # Checks for correct amount of arguments
     if len(sys.argv) != 3:
         print("Usage Python3 " + sys.argv[0] + " -p port \n")
         sys.exit(1)
 
     port = int(sys.argv[2])
 
-    # checking for valid port number
+    # Checking for valid port number
     if not 1025 <= port <= 65535:
         print('Incorrect port number')
         sys.exit()
@@ -840,21 +924,24 @@ def run_ai():
          print('Connection refused, check host is running')
          sys.exit()
 
-    world.read_in(sock, player)
+    world.read_in(sock, agent)
     while 1:
-        # Get the next action from the player
-        action = player.get_action()
+        # Get the next action from the agent
+        action = agent.get_action()
 
         moves += 1
 
-        player.update_state(action)
+        agent.update_state(action)
         sock.send(action.encode('utf-8'))
-        world.read_in(sock, player)
-        player.print_world()
+        world.read_in(sock, agent)
+        agent.print_world()
         print(moves)
 
     sock.close()
 
 if __name__ == "__main__":
+    # Function used to profile the time usage of the AI
     # cProfile.run('run_ai()')
+
+    # Normal function call to run the AI
     run_ai()
