@@ -1004,8 +1004,8 @@ def run_ai():
         agent.update_state(action)
         sock.send(action.encode('utf-8'))
         world.read_in(sock, agent)
-        agent.print_world()
-        print(moves)
+        # agent.print_world()
+        # print(moves)
 
     sock.close()
 
