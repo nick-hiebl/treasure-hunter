@@ -13,14 +13,14 @@
 #
 # The answer:
 # The bot has a list of preferred objectives it tries to take which are
-# described on lines 709 and 805 to do whilst on land or in the water.
+# described on lines 707 and 803 to do whilst on land or in the water.
 #
 # It determines the if it is possible to perform these different sets of
 # actions and how to do them by using a Breadth First Search through the
 # map. A BFS was chosen as for these problems as many searches would not
-# have a great heuristic function, and the grid is not too large.
-# The BFS was developed to be quite general with lambda functions,
-# enabling it to be used for many cases.
+# have a great heuristic function, and the grid is not too large. The
+# BFS was developed to be quite general with lambda functions, enabling
+# it to be used for many cases.
 #
 # A big decision was made to perform the search as through the grid,
 # without considering turns until the end, making it faster to compute.
@@ -30,10 +30,8 @@
 # Another VERY important structure in optimising and simplifying the
 # processing for the water cases was the Union Find structure.
 #
-# https://en.wikipedia.org/wiki/Disjoint-set_data_structure
-#
 # The functions setting up this structure are implemented on lines
-# 328 to 359.
+# 326 to 357.
 #
 # This allowed the world to be simplified and analysed as contiguous
 # sections of land, which meant many checks of what island a tile
