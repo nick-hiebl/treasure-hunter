@@ -800,6 +800,8 @@ class Agent:
         return path
 
     # Find a path to take
+    # If on a boat call get_water_moves
+    # If on land call get_land_moves
     def get_moves(self):
         path = []
         if not self.on_boat:
@@ -812,18 +814,21 @@ class Agent:
 
     # Get the next action to make
     def get_action(self):
+        # If some actions have been preprocessed return one of them
         if self.actions:
             return self.actions.pop(0)
 
+        # If no moves have been preprocessed then find some
         if not self.moves:
             self.moves = self.get_moves()
 
+        # Get the first tile we need to move to
         first = self.moves.pop()
 
         actions = []
 
+        # Convert them into a list of actions
         way = self.get_direction_to(first)
-
         actions = self.get_direction_to_moves(way)
 
         # Change the action if walking into an obstacle
@@ -836,6 +841,7 @@ class Agent:
             actions.append('u')
             actions.append('f')
 
+        # Save the rest of the actions for later
         self.actions = actions
         return self.actions.pop(0)
 
@@ -853,30 +859,39 @@ class Agent:
 
     # Based on a given move, determine how this affects the world
     def update_state(self, action):
+        # Handle tree cutting
         if action in 'cC' and 'a' in self.inventory:
+            # Don't hold duplicate rafts
             if 'w' not in self.inventory:
                 self.inventory.append('w')
+        # If moving forward
         elif action in 'fF':
+            # Calculate position moved to
             self.position = self.view_to_offset(0, -1)
+            # Handle leaving the water
             if self.on_boat:
                 if not WATER(self.world, self.position):
                     self.on_boat = False
+            # Handle picking stuff up
             thing = self.world.access(self.position)
             if thing in 'o$':
                 self.inventory.append(thing)
+            # No need to track duplicate keys and axes
             if thing in 'ak' and thing not in self.inventory:
                 self.inventory.append(self.world.access(self.position))
 
+            # Heading into water
             if self.world.access(self.position) == '~':
                 if self.on_boat:
                     pass
+                # Handle raft or rock placement
                 elif not 'o' in self.inventory:
                     self.on_boat = True
                     self.inventory.remove('w')
                 else:
                     self.world.set(self.position, 'O')
                     self.inventory.remove('o')
-
+        # Update direction if turning
         elif action in 'lL':
             self.direction = (self.direction + 3) % 4
         elif action in 'rR':
