@@ -11,9 +11,39 @@
 # data structures employed, and explain any design decisions you made
 # along the way.
 #
+# The answer:
+# The bot has a list of preferred objectives it tries to take which are
+# described on lines 709 and 805 to do whilst on land or in the water.
 #
+# It determines the if it is possible to perform these different sets of
+# actions and how to do them by using a Breadth First Search through the
+# map. A BFS was chosen as for these problems as many searches would not
+# have a great heuristic function, and the grid is not too large.
+# The BFS was developed to be quite general with lambda functions,
+# enabling it to be used for many cases.
 #
+# A big decision was made to perform the search as through the grid,
+# without considering turns until the end, making it faster to compute.
+# The Agent.get_action function then processes this path through the
+# grid into a list of simple actions.
 #
+# Another VERY important structure in optimising and simplifying the
+# processing for the water cases was the Union Find structure.
+#
+# https://en.wikipedia.org/wiki/Disjoint-set_data_structure
+#
+# The functions setting up this structure are implemented on lines
+# 328 to 359.
+#
+# This allowed the world to be simplified and analysed as contiguous
+# sections of land, which meant many checks of what island a tile
+# belongs to could be done in constant time (technically O(n), but it is
+# amortised to O(1) here as many calls are done on each tile, making the
+# forest incredibly tight).
+#
+# This allowed me to perform many many operations on islands quickly as
+# I could identify or evalute regions very quickly without repeated
+# flood fill operations.
 
 import sys
 import socket
@@ -22,7 +52,8 @@ from queue import PriorityQueue
 import time
 import cProfile
 
-WORLD_SIZE = 160
+# Size needed to store a 80x80 world where we could start anywhere
+WORLD_SIZE = 161
 
 class World:
     def __init__(self):
