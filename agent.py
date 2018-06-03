@@ -26,16 +26,29 @@ WORLD_SIZE = 160
 
 class World:
     def __init__(self):
+        # Stores the item at each coordinate
         self.world = [['' for _ in range(WORLD_SIZE)]
             for _ in range(WORLD_SIZE)]
+
+        # Stores the parent of each coordinate
+        # This is used for the union find structure which segregates
+        # the world into distinct zones of land
         self.parent = [[(j, i) for j in range(WORLD_SIZE)]
             for i in range(WORLD_SIZE)]
 
+        # Stores the water tiles at the edge of each zone
         self.water = {}
+
+        # Stores the number of stones in each zone
         self.n_stones = {}
+
+        # Stores the number of trees in each zone
         self.n_trees = {}
+
+        # Stores the list of zones in the world
         self.zones = []
 
+        # Stores the extreme x and y values used to represent the world
         self.XMIN = WORLD_SIZE
         self.YMIN = WORLD_SIZE
         self.XMAX = 0
@@ -611,13 +624,26 @@ class World:
 
 class Agent:
     def __init__(self, position, direction, inventory, on_boat, world):
+        # Stores the position of the agent
         self.position = position
+
+        # Stores the direction the agent is facing
         self.direction = direction
+
+        # Stores the agent's inventory of held items
         self.inventory = inventory
+
+        # A World object representing the entire scenario
         self.world = world
+
+        # Boolean representing whether the agent is on a boat
         self.on_boat = on_boat
 
+        # The list of preprocessed moves (ie tiles to go through)
         self.moves = []
+
+        # The list of preprocessed actions to take (ie forward, left,
+        # right, cut, unlock moves etc.)
         self.actions = []
 
     # Determine whether the agent has a certain thing in its inventory
