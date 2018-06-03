@@ -410,12 +410,17 @@ class World:
             other = list(options_to.keys())[0]
             return (len(options_to[other][1]) - 1 <= num,
                 options_to[other][1])
+
         # If there are multiple options to go to
         if len(options_to.keys()) > 1:
             stone_path = []
             # See if there are any legal ways to use stepping stones to get to the next location
             for other in options_to.keys():
                 if options_to[other][0] - 1 <= num:
+                    # If we are in the home zone and can immediately get to the gold with stones
+                    # then go there and come back
+                    if self.zone_has(other, '$') and self.get_root((WORLD_SIZE//2, WORLD_SIZE//2)) == self.get_root(position):
+                        return (True, options_to[other][1])
                     stone_path.append(options_to[other])
             # Some exist
             if stone_path:
