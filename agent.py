@@ -981,8 +981,11 @@ def run_ai():
     sock.close()
 
 if __name__ == "__main__":
-    # Function used to profile the time usage of the AI
-    # cProfile.run('run_ai()')
+    profiling = False
 
-    # Normal function call to run the AI
-    run_ai()
+    if profiling:
+        # Function used to profile the time usage of the AI
+        cProfile.run('run_ai()')
+    else:
+        # Normal function call to run the AI
+        run_ai()
